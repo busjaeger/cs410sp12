@@ -389,9 +389,19 @@ double DBInterface::computeWeight(int docID,
 		     int qryTermFreq, 
 		     Index & ind)
 {
+	double N = ind.docCount();
+	double df = ind.docCount(termID);
+	double tf = docTermFreq;
+	double qtf = qryTermFreq;
+	double dl = ind.docLength(docID);
+	double avdl = ind.docLengthAvg();
+	double k1 = 1.2;
+	double b = 0.75;
+	double k3 = 1000;
 
-	// This is empty, you should fill it
-
+	return log((N - df + 0.5) / (df + 0.5))
+			* (((k1 + 1.0) * tf) / (tf + k1 * (1.0 - b + b * (dl / avdl))))
+			* (((k3 + 1.0) * qtf) / (k3 + qtf));
 }
 
 // compute the adjusted score
@@ -400,7 +410,7 @@ double DBInterface::computeAdjustedScore(double origScore, // the score from the
 			    int qrySum, // number of query terms 
 			    Index &ind) // index
 {
-	 // this is empty, you should fill it.
+	return origScore;
 }
 
 
