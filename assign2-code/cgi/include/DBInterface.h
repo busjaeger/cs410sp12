@@ -162,9 +162,9 @@ public:
    */
   void getWordStem(string *term);
 
-  double computeWeight(int docID, int termID,  int docTermFreq, int qryTermProb, Index & ind);
+  double computeWeight(int docID, int termID,  int docTermFreq, double qryTermProb, Index & ind);
   double computeAdjustedScore(double origScore, int docID, int qryProbSum, Index &ind);
-  void retrieve(int * query, Index &ind, ScoreAccumulator &scAcc, IndexedRealVector &results);
+  void retrieve(double * query, Index &ind, ScoreAccumulator &scAcc, IndexedRealVector &results);
 
 }; // class DBInterface
 

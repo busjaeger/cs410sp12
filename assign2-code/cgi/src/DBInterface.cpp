@@ -386,7 +386,7 @@ void DBInterface::displaySearchResults(lemur::api::Index *db, int datasourceID, 
 double DBInterface::computeWeight(int docID,
 		     int termID,
 		     int docTermFreq,
-		     int qryTermFreq, 
+		     double qryTermFreq,
 		     Index & ind)
 {
 	double N = ind.docCount();
@@ -415,7 +415,7 @@ double DBInterface::computeAdjustedScore(double origScore, // the score from the
 
 
 
-void DBInterface::retrieve(int * query, Index &ind, // index
+void DBInterface::retrieve(double * query, Index &ind, // index
 	       ScoreAccumulator &scAcc, // score accumulator
 	       IndexedRealVector &results) // result docs
 {
@@ -512,7 +512,7 @@ void DBInterface::search(int datasourceID, string *query, long listLength, long 
 
 
 	// create a query representation
-    int *qt = new int[db->termCountUnique()+1];
+    double *qt = new int[db->termCountUnique()+1];
      for (int t=1; t<=db->termCountUnique(); t++) {
 	      qt[t]=0;
     }
@@ -531,6 +531,57 @@ void DBInterface::search(int datasourceID, string *query, long listLength, long 
 
 	// sort results based on caculated scores
     results.Sort();
+
+	// Rocchio feedback
+	int k=10;
+	double alpha = 1, beta = 0.75, weight = beta / k;
+	double *newquery = new double[db->termCountUnique()+1];
+	for (int t=1; t<=db->termCountUnique(); t++) {
+		newquery[t] = alpha * qt[t];
+	}
+	double firstScore = results.empty() ? 0.0 : results[0].val;
+	for (int i=0; i<=k && i< results.size(); i++) {
+		DOCID_T docId = results[i].ind;
+		lemur::api::TermInfoList *tList = db->termInfoList(docId);
+		const lemur::api::TermInfo *info;
+		tList->startIteration();
+		while (tList->hasMore()) {
+			info = tList->nextEntry();
+			int termID = info->termID(); // this is the ID of a term
+			double tf = info->count(); // this is the count of the term
+
+			// Rocchio feedback
+			// avg prec=0.256, relevant docs=351, break even=0.296
+//			newquery[termID] += weight * tf;
+
+			// Rocchio feedback w/ Okapi term frequency
+			// avg prec=0.235; relevant docs=395, break even=0.252
+//			double df = db->docCount(termID);
+//			double dl = db->docLength(docId);
+//			double avdl = db->docLengthAvg();
+//			double N = db->docCount();
+//			newquery[termID] += log((N - df + 0.5) / (df + 0.5))
+//						* (((1.2 + 1.0) * tf) / (tf + 1.2 * (1.0 - 0.75 + 0.75 * (dl / avdl))));
+
+			// Rocchio feedback w/ score weighting
+			// avg prec=0.283, relevant docs = 361, break even=0.312
+//			newquery[termID] += weight * tf * (results[i].val / firstScore);
+
+			// Rocchio feedback w/ score weighting and TF*IDF
+			// avg prec=0.301, relevant docs = 413, break even=0.326
+			double N = db->docCount();
+			double df = db->docCount(termID);
+			newquery[termID] += weight * log(tf) * log (N/df) * (results[i].val / firstScore);
+
+		}
+		delete tList;
+	}
+
+	// reset accumulator and results and rerun scoring and sorting with feedback
+	accumulator.reset();
+	results.clear();
+	retrieve(newquery, *db, accumulator, results);
+	results.Sort();
 
     //delete(stopper);
     delete[]qChar;
