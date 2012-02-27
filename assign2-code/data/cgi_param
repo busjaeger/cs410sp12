@@ -1,0 +1,10 @@
+<parameters>
+<index>path to your key index file</index>
+<indexType>key</indexType>
+<manager>path to your key index file</manager>
+<managerType>elem</managerType>
+<dataFiles>path to your df file</dataFiles>
+<position>1</position>
+<docFormat>web</docFormat>
+<memory>256000000</memory>
+</parameters>
