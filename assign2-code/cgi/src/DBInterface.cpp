@@ -8,10 +8,16 @@ using namespace lemur::api;
 /** construction / destruction **/
 DBInterface::DBInterface() {
   output=NULL;
+//  string s = CGIConfiguration::getInstance().getKVItem("mu");
+//  mu = s == "" ? 0 : atoi(s.c_str());
+  mu = 1000.0;
 }
 
 DBInterface::DBInterface(CGIOutput *outputInterface) {
   output=outputInterface;
+//  string s = CGIConfiguration::getInstance().getKVItem("mu");
+//  mu = s == "" ? 0 : atoi(s.c_str());
+  mu = 1000.0;
 }
 
 DBInterface::~DBInterface() {
@@ -389,9 +395,7 @@ double DBInterface::computeWeight(int docID,
 		     int qryTermFreq, 
 		     Index & ind)
 {
-
-	// This is empty, you should fill it
-
+	return log( (ind.termCount() * docTermFreq) / (mu * ind.termCount(termID)) );
 }
 
 // compute the adjusted score
@@ -400,7 +404,8 @@ double DBInterface::computeAdjustedScore(double origScore, // the score from the
 			    int qrySum, // number of query terms 
 			    Index &ind) // index
 {
-	 // this is empty, you should fill it.
+	int dl = ind.docLength(docID);
+	return origScore + log(mu / (dl + mu));
 }
 
 

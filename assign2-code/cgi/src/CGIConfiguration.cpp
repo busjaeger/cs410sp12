@@ -96,6 +96,20 @@ bool CGIConfiguration::readConfigFile(char *filePath) {
     }
   }
 
+  const XMLNode *properties = rootNode->getChild("properties");
+  if (properties) {
+		std::vector<XMLNode*> properties = indexesStart->getChildren();
+		for (std::vector<XMLNode*>::iterator vIter = properties.begin(); vIter != properties.end(); vIter++) {
+			const XMLNode *keyNode = (*vIter)->getChild("key");
+			const XMLNode *valueNode = (*vIter)->getChild("value");
+			if (keyNode && valueNode) {
+				string key = keyNode->getValue();
+				string value = valueNode->getValue();
+				putKVItem(key, value);
+			}
+		}
+  }
+
   currentIndicesSize=(int)indices.size();
 
   return true;
