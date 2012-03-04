@@ -512,7 +512,7 @@ void DBInterface::search(int datasourceID, string *query, long listLength, long 
 
 
 	// create a query representation
-    double *qt = new int[db->termCountUnique()+1];
+    double *qt = new double[db->termCountUnique()+1];
      for (int t=1; t<=db->termCountUnique(); t++) {
 	      qt[t]=0;
     }
