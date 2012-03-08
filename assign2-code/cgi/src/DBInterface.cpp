@@ -5,6 +5,14 @@
 
 using namespace lemur::api;
 
+// Okapi parameters
+#define k1	1.2
+#define k3	1000.0
+#define b	0.75
+// term proximity parameters
+#define n	100
+#define md	5
+
 /** construction / destruction **/
 DBInterface::DBInterface() {
   output=NULL;
@@ -382,7 +390,6 @@ void DBInterface::displaySearchResults(lemur::api::Index *db, int datasourceID, 
   output->displayResultsPageEnding();
 }
 
-
 double DBInterface::computeWeight(int docID,
 		     int termID,
 		     int docTermFreq,
@@ -391,17 +398,9 @@ double DBInterface::computeWeight(int docID,
 {
 	double N = ind.docCount();
 	double df = ind.docCount(termID);
-	double tf = docTermFreq;
-	double qtf = qryTermFreq;
-	double dl = ind.docLength(docID);
-	double avdl = ind.docLengthAvg();
-	double k1 = 1.2;
-	double b = 0.75;
-	double k3 = 1000;
 
-	return log((N - df + 0.5) / (df + 0.5))
-			* (((k1 + 1.0) * tf) / (tf + k1 * (1.0 - b + b * (dl / avdl))))
-			* (((k3 + 1.0) * qtf) / (k3 + qtf));
+	return computeIDFWeight(termID, ind) * computeTFWeight(docID, docTermFreq, ind)
+			* computeQTFWeight(qryTermFreq);
 }
 
 // compute the adjusted score
@@ -413,7 +412,25 @@ double DBInterface::computeAdjustedScore(double origScore, // the score from the
 	return origScore;
 }
 
+double DBInterface::computeIDFWeight(int termID, Index & ind) {
+	double N = ind.docCount();
+	double df = ind.docCount(termID);
+	return log((N - df + 0.5) / (df + 0.5));
+}
 
+double DBInterface::computeTFWeight(int docID, int tf, Index & ind) {
+	return ((k1 + 1.0) * tf) / (tf + computeDLWeight(docID, ind));
+}
+
+double DBInterface::computeQTFWeight(int qtf) {
+	return (((k3 + 1.0) * qtf) / (k3 + qtf));
+}
+
+double DBInterface::computeDLWeight(int docID, Index & ind) {
+	double dl = ind.docLength(docID);
+	double avdl = ind.docLengthAvg();
+	return k1 * (1.0 - b + b * (dl / avdl));
+}
 
 void DBInterface::retrieve(int * query, Index &ind, // index
 	       ScoreAccumulator &scAcc, // score accumulator
@@ -468,6 +485,72 @@ void DBInterface::retrieve(int * query, Index &ind, // index
 
 }
 
+void DBInterface::addTermProximity(vector<int> qryTermIDs, IndexedRealVector & results, lemur::api::Index *& db, int *qt)
+{
+    // build all possible combinations of query term pairs
+    vector<pair<int,int> > s;
+    for(vector<pair<int,int> >::size_type i = 0;i < qryTermIDs.size();i++){
+        for(vector<pair<int,int> >::size_type j = i + 1;j < qryTermIDs.size();j++){
+            pair<int,int> pair(qryTermIDs[i], qryTermIDs[j]);
+            s.push_back(pair);
+        }
+    }
+
+    // adjust score of the first n documents
+    for (int i = 0; i < n && i < results.size(); i++) {
+    	int docID = results[i].ind;
+    	TermInfoList* terms = db->termInfoList(docID);
+    	double tprsv = 0.0;
+    	for (vector<pair<int, int> >::size_type p = 0; p < s.size(); p++) {
+    		int fqtID = s[p].first;
+    		int sqtID = s[p].second;
+    		// find terms in document (could be pulled out of the loop)
+    		TermInfo* fTerm = NULL;
+    		TermInfo* sTerm = NULL;
+    		terms->startIteration();
+    		while (terms->hasMore()) {
+    			TermInfo *term=terms->nextEntry();
+    			if (term) {
+    				if (term->termID() == fqtID) {
+    					fTerm = term;
+    					if (sTerm)
+    						break; //both found
+    				} else if (term->termID() == sqtID) {
+    					sTerm = term;
+    					if (fTerm)
+    						break; //both found
+    				}
+    			}
+    		}
+    		// if either term not present in document, try next pair
+    		if (!fTerm || !sTerm)
+    			continue;
+    		// compute term pair instance weight
+    		double tpi = 0.0;
+    		const LOC_T* fPos = fTerm->positions();
+    		const LOC_T* sPos = sTerm->positions();
+    		for (int f=0; f < fTerm->count(); f++) {
+    			for (int s=0; s < sTerm->count(); s++) {
+    				int distance = abs(fPos[f] - sPos[s]);
+    				if (distance <= md)
+    					tpi += 1.0 / (distance * distance);
+    			}
+    		}
+    		// weigh proximity score
+    		double proxmityWeight = ((k1 + 1.0) * tpi) / (computeDLWeight(docID, *db) + tpi);
+    		// compute minimum of query term weights (could be pulled out of the loop)
+    		double minQTWeight = min(computeQTFWeight(qt[fqtID]), computeQTFWeight(qt[sqtID]));
+    		// add score to term proximity retrieval status value
+    		tprsv += proxmityWeight * minQTWeight;
+    	}
+    	results[i].val += tprsv;
+    	delete terms;
+    }
+
+    // sort results according to updated scores
+    results.Sort();
+}
+
 // Method needed for search
 
 void DBInterface::search(int datasourceID, string *query, long listLength, long rankStart)
@@ -519,11 +602,14 @@ void DBInterface::search(int datasourceID, string *query, long listLength, long 
     int qryFreqSum =0;
 	// iteration through each term in the query
     q->startTermIteration();
+    vector<int> qryTermIDs;
     while (q->hasMore()) {
 	   const Term *qryTerm = q->nextTerm();
 	   int qryTermID = db->term(qryTerm->spelling());
 	   qt[qryTermID] ++;
 	   qryFreqSum ++;
+	   if (qt[qryTermID] == 1)
+		   qryTermIDs.push_back(qryTermID);
 	}
 
     // Call retreival Method
@@ -531,6 +617,11 @@ void DBInterface::search(int datasourceID, string *query, long listLength, long 
 
 	// sort results based on caculated scores
     results.Sort();
+
+    // if the query has more than one word, take their proximity into account
+    if (qryTermIDs.size() > 1) {
+    	addTermProximity(qryTermIDs, results, db, qt);
+	}
 
     //delete(stopper);
     delete[]qChar;
