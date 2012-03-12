@@ -389,6 +389,9 @@ double DBInterface::computeWeight(int docID,
 		     int qryTermFreq, 
 		     Index & ind)
 {
+	if (docTermFreq == 0)
+		return 0;
+
 	double N = ind.docCount();
 	double df = ind.docCount(termID);
 	double tf = docTermFreq;
@@ -398,9 +401,10 @@ double DBInterface::computeWeight(int docID,
 	double k1 = 1.2;
 	double b = 0.75;
 	double k3 = 1000;
+	double delta = 1.0;
 
 	return log((N - df + 0.5) / (df + 0.5))
-			* (((k1 + 1.0) * tf) / (tf + k1 * (1.0 - b + b * (dl / avdl))))
+			* (((k1 + 1.0) * tf) / ((tf + k1 * (1.0 - b + b * (dl / avdl)))) + delta)
 			* (((k3 + 1.0) * qtf) / (k3 + qtf));
 }
 
