@@ -505,32 +505,34 @@ void DBInterface::addTermProximity(vector<int> qryTermIDs, IndexedRealVector & r
     		int fqtID = s[p].first;
     		int sqtID = s[p].second;
     		// find terms in document (could be pulled out of the loop)
-    		TermInfo* fTerm = NULL;
-    		TermInfo* sTerm = NULL;
+    		const LOC_T* fPos;
+    		const LOC_T* sPos;
+    		COUNT_T sCount = -1;
+    		COUNT_T fCount = -1;
     		terms->startIteration();
     		while (terms->hasMore()) {
     			TermInfo *term=terms->nextEntry();
     			if (term) {
     				if (term->termID() == fqtID) {
-    					fTerm = term;
-    					if (sTerm)
+    					fPos = term->positions();
+    					fCount = term->count();
+    					if (sCount != -1)
     						break; //both found
     				} else if (term->termID() == sqtID) {
-    					sTerm = term;
-    					if (fTerm)
+    					sPos = term->positions();
+    					sCount = term->count();
+    					if (fCount != -1)
     						break; //both found
     				}
     			}
     		}
     		// if either term not present in document, try next pair
-    		if (!fTerm || !sTerm)
+    		if (fCount <= 0 || sCount <= 0)
     			continue;
     		// compute term pair instance weight
     		double tpi = 0.0;
-    		const LOC_T* fPos = fTerm->positions();
-    		const LOC_T* sPos = sTerm->positions();
-    		for (int f=0; f < fTerm->count(); f++) {
-    			for (int s=0; s < sTerm->count(); s++) {
+    		for (int f=0; f < fCount; f++) {
+    			for (int s=0; s < sCount; s++) {
     				int distance = abs(fPos[f] - sPos[s]);
     				if (distance <= md)
     					tpi += 1.0 / (distance * distance);
