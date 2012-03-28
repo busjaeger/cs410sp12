@@ -395,7 +395,7 @@ double DBInterface::computeWeight(int docID,
 		     int qryTermFreq, 
 		     Index & ind)
 {
-	return log( (ind.termCount() * docTermFreq) / (mu * ind.termCount(termID)) );
+	return log(1 + (ind.termCount() * docTermFreq) / (mu * ind.termCount(termID)) );
 }
 
 // compute the adjusted score
@@ -405,7 +405,7 @@ double DBInterface::computeAdjustedScore(double origScore, // the score from the
 			    Index &ind) // index
 {
 	int dl = ind.docLength(docID);
-	return origScore + log(mu / (dl + mu));
+	return origScore + qrySum * log(mu / (dl + mu));
 }
 
 
