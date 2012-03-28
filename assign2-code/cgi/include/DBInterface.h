@@ -33,7 +33,6 @@ private:
   string    pathToIndex;
   string    dataRoot;
   CGIOutput *output;
-  double mu;
 
   lemur::api::Stemmer* getDbStemmer(const lemur::api::Index* ind);
 
