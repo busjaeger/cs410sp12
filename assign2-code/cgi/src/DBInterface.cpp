@@ -428,7 +428,7 @@ void DBInterface::retrieve(double * query, Index &ind, // index
 	int qryFreqSum =0;
   for (t=1; t<=ind.termCountUnique();t++) {
     if (query[t]>0) {
-	qryFreqSum+=query[t];
+	qryFreqSum+=(int)query[t];
       // fetch inverted entries
       DocInfoList *dList = ind.docInfoList(t);
 
@@ -534,18 +534,21 @@ void DBInterface::search(int datasourceID, string *query, long listLength, long 
 
 	// Rocchio feedback
 	int k=10;
-	double alpha = 1, beta = 0.75, weight = beta / k;
+	double alpha = 1.0, beta = 0.75, weight = beta / k;
 	double *newquery = new double[db->termCountUnique()+1];
 	for (int t=1; t<=db->termCountUnique(); t++) {
 		newquery[t] = alpha * qt[t];
 	}
 	double firstScore = results.empty() ? 0.0 : results[0].val;
-	for (int i=0; i<=k && i< results.size(); i++) {
+	double N = db->docCount();
+	for (int i=0; i < k && i < results.size(); i++) {
 		DOCID_T docId = results[i].ind;
 		lemur::api::TermInfoList *tList = db->termInfoList(docId);
 		const lemur::api::TermInfo *info;
 		tList->startIteration();
+		int num =0;
 		while (tList->hasMore()) {
+			num++;
 			info = tList->nextEntry();
 			int termID = info->termID(); // this is the ID of a term
 			double tf = info->count(); // this is the count of the term
@@ -569,12 +572,17 @@ void DBInterface::search(int datasourceID, string *query, long listLength, long 
 
 			// Rocchio feedback w/ score weighting and TF*IDF
 			// avg prec=0.301, relevant docs = 413, break even=0.326
-			double N = db->docCount();
 			double df = db->docCount(termID);
-			newquery[termID] += weight * log(tf) * log (N/df) * (results[i].val / firstScore);
-
+			newquery[termID] += weight * log(1.0 + tf) * log (1.0 + N / df) * (results[i].val / firstScore);
 		}
 		delete tList;
+	}
+
+	// cutoff to improve performance
+	double min = 1.0;
+	for (int t=1; t<=db->termCountUnique(); t++) {
+		if (newquery[t] > 0 && newquery[t] < min)
+			newquery[t] = 0;
 	}
 
 	// reset accumulator and results and rerun scoring and sorting with feedback
