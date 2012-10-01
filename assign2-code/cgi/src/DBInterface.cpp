@@ -541,7 +541,7 @@ void DBInterface::addTermProximity(vector<int> qryTermIDs, IndexedRealVector & r
     		// weigh proximity score
     		double proxmityWeight = ((k1 + 1.0) * tpi) / (computeDLWeight(docID, *db) + tpi);
     		// compute minimum of query term weights (could be pulled out of the loop)
-    		double minQTWeight = min(computeQTFWeight(qt[fqtID]), computeQTFWeight(qt[sqtID]));
+    		double minQTWeight = min(computeQTFWeight(qt[fqtID])*computeIDFWeight(qt[fqtID], *db), computeQTFWeight(qt[sqtID])*computeIDFWeight(qt[sqtID], *db));
     		// add score to term proximity retrieval status value
     		tprsv += proxmityWeight * minQTWeight;
     	}
